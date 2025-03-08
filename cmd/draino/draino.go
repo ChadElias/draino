@@ -34,9 +34,9 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 
-	"github.com/planetlabs/draino/internal/kubernetes"
+	"github.com/ChadElias/draino/internal/kubernetes"
 )
 
 // Default leader election settings.
