@@ -187,7 +187,8 @@ func (d *APICordonDrainer) deleteTimeout() time.Duration {
 
 // Cordon the supplied node. Marks it unschedulable for new pods.
 func (d *APICordonDrainer) Cordon(n *core.Node, mutators ...nodeMutatorFn) error {
-	fresh, err := d.c.CoreV1().Nodes().Get(n.GetName(), meta.GetOptions{})
+	ctx := context.Background()
+	fresh, err := d.c.CoreV1().Nodes().Get(ctx, n.GetName(), meta.GetOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "cannot get node %s", n.GetName())
 	}
@@ -198,7 +199,7 @@ func (d *APICordonDrainer) Cordon(n *core.Node, mutators ...nodeMutatorFn) error
 	for _, m := range mutators {
 		m(fresh)
 	}
-	if _, err := d.c.CoreV1().Nodes().Update(fresh); err != nil {
+	if _, err := d.c.CoreV1().Nodes().Update(ctx, fresh, meta.UpdateOptions{}); err != nil {
 		return errors.Wrapf(err, "cannot cordon node %s", fresh.GetName())
 	}
 	return nil
