@@ -241,14 +241,14 @@ func main() {
 				kingpin.FatalIfError(await(nodes), "error watching")
 			},
 			OnStoppedLeading: func() {
-				log.Info("Leader lost", "identity", id)
+				log.Info("Leader lost", zap.String("identity", id))
 				os.Exit(0)
 			},
 			OnNewLeader: func(identity string) {
 				if identity == id {
 					return
 				}
-				log.Info("New leader elected", "identity", identity)
+				log.Info("New leader elected", zap.String("identity", identity))
 			},
 		},
 	}
