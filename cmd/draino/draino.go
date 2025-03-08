@@ -35,6 +35,8 @@ import (
 	"k8s.io/client-go/tools/leaderelection"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/klog/v2"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	coordinationv1 "k8s.io/client-go/kubernetes/typed/coordination/v1"
 
 	"github.com/ChadElias/draino/internal/kubernetes"
 )
@@ -213,34 +215,45 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	lock, err := resourcelock.New(
-		resourcelock.EndpointsResourceLock,
-		*namespace,
-		*leaderElectionTokenName,
-		cs.CoreV1(),
-		cs.CoordinationV1(),
-		resourcelock.ResourceLockConfig{
+	// Create the lease lock resource
+	lock := &resourcelock.LeaseLock{
+		LeaseMeta: metav1.ObjectMeta{
+			Name:      "draino-leader-election",
+			Namespace: *namespace,
+		},
+		Client: cs.CoordinationV1(),
+		LockConfig: resourcelock.ResourceLockConfig{
 			Identity:      id,
 			EventRecorder: kubernetes.NewEventRecorder(cs),
 		},
-	)
-	kingpin.FatalIfError(err, "cannot create lock")
+	}
 
-	leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
-		Lock:          lock,
-		LeaseDuration: *leaderElectionLeaseDuration,
-		RenewDeadline: *leaderElectionRenewDeadline,
-		RetryPeriod:   *leaderElectionRetryPeriod,
+	// Create leader election config
+	leaderConfig := leaderelection.LeaderElectionConfig{
+		Lock:            lock,
+		LeaseDuration:   *leaderElectionLeaseDuration,
+		RenewDeadline:   *leaderElectionRenewDeadline,
+		RetryPeriod:     *leaderElectionRetryPeriod,
+		ReleaseOnCancel: true,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
 				log.Info("node watcher is running")
 				kingpin.FatalIfError(await(nodes), "error watching")
 			},
 			OnStoppedLeading: func() {
-				kingpin.Fatalf("lost leader election")
+				log.Info("Leader lost", "identity", id)
+				os.Exit(0)
+			},
+			OnNewLeader: func(identity string) {
+				if identity == id {
+					return
+				}
+				log.Info("New leader elected", "identity", identity)
 			},
 		},
-	})
+	}
+
+	leaderelection.RunOrDie(ctx, leaderConfig)
 }
 
 type runner interface {
