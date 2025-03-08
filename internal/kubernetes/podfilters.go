@@ -17,6 +17,7 @@ and limitations under the License.
 package kubernetes
 
 import (
+	"context"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -69,13 +70,12 @@ func NewDaemonSetPodFilter(client kubernetes.Interface) PodFilterFunc {
 			return true, nil
 		}
 
-		// Pods pass the filter if they were created by a DaemonSet that no
-		// longer exists.
-		if _, err := client.AppsV1().DaemonSets(p.GetNamespace()).Get(c.Name, meta.GetOptions{}); err != nil {
+		ctx := context.Background()
+		if _, err := client.AppsV1().DaemonSets(p.Namespace).Get(ctx, c.Name, meta.GetOptions{}); err != nil {
 			if apierrors.IsNotFound(err) {
 				return true, nil
 			}
-			return false, errors.Wrapf(err, "cannot get DaemonSet %s/%s", p.GetNamespace(), c.Name)
+			return false, errors.Wrapf(err, "cannot get DaemonSet %s/%s", p.Namespace, c.Name)
 		}
 		return false, nil
 	}
@@ -90,13 +90,12 @@ func NewStatefulSetPodFilter(client kubernetes.Interface) PodFilterFunc {
 			return true, nil
 		}
 
-		// Pods pass the filter if they were created by a StatefulSet that no
-		// longer exists.
-		if _, err := client.AppsV1().StatefulSets(p.GetNamespace()).Get(c.Name, meta.GetOptions{}); err != nil {
+		ctx := context.Background()
+		if _, err := client.AppsV1().StatefulSets(p.Namespace).Get(ctx, c.Name, meta.GetOptions{}); err != nil {
 			if apierrors.IsNotFound(err) {
 				return true, nil
 			}
-			return false, errors.Wrapf(err, "cannot get StatefulSet %s/%s", p.GetNamespace(), c.Name)
+			return false, errors.Wrapf(err, "cannot get StatefulSet %s/%s", p.Namespace, c.Name)
 		}
 		return false, nil
 	}

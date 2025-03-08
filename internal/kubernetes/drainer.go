@@ -17,6 +17,7 @@ and limitations under the License.
 package kubernetes
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -348,30 +349,35 @@ func (d *APICordonDrainer) evict(p core.Pod, abort <-chan struct{}, e chan<- err
 	if p.Spec.TerminationGracePeriodSeconds != nil && *p.Spec.TerminationGracePeriodSeconds < gracePeriod {
 		gracePeriod = *p.Spec.TerminationGracePeriodSeconds
 	}
+	
+	ctx := context.Background()
 	for {
 		select {
 		case <-abort:
 			e <- errors.New("pod eviction aborted")
 			return
 		default:
-			err := d.c.CoreV1().Pods(p.GetNamespace()).Evict(&policy.Eviction{
-				ObjectMeta:    meta.ObjectMeta{Namespace: p.GetNamespace(), Name: p.GetName()},
-				DeleteOptions: &meta.DeleteOptions{GracePeriodSeconds: &gracePeriod},
-			})
+			eviction := &policy.Eviction{
+				ObjectMeta: meta.ObjectMeta{
+					Name:      p.Name,
+					Namespace: p.Namespace,
+				},
+				DeleteOptions: &meta.DeleteOptions{
+					GracePeriodSeconds: &gracePeriod,
+				},
+			}
+			err := d.c.PolicyV1().Evictions(p.Namespace).Evict(ctx, eviction)
 			switch {
-			// The eviction API returns 429 Too Many Requests if a pod
-			// cannot currently be evicted, for example due to a pod
-			// disruption budget.
 			case apierrors.IsTooManyRequests(err):
 				time.Sleep(5 * time.Second)
 			case apierrors.IsNotFound(err):
 				e <- nil
 				return
 			case err != nil:
-				e <- errors.Wrapf(err, "cannot evict pod %s/%s", p.GetNamespace(), p.GetName())
+				e <- errors.Wrapf(err, "cannot evict pod %s/%s", p.Namespace, p.Name)
 				return
 			default:
-				e <- errors.Wrapf(d.awaitDeletion(p, d.deleteTimeout()), "cannot confirm pod %s/%s was deleted", p.GetNamespace(), p.GetName())
+				e <- errors.Wrapf(d.awaitDeletion(p, d.deleteTimeout()), "cannot confirm pod %s/%s was deleted", p.Namespace, p.Name)
 				return
 			}
 		}
